@@ -1,0 +1,38 @@
+variables:
+  PROJECT_NAME: "api-leave-tracker"
+
+stages:
+  - build
+
+
+
+.build-docker:
+  stage: build
+  image: ${DOCKER_REGISTRY_MIRROR}/basalam/docker:20.10.7-custom
+  script:
+    - docker login ${DOCKER_REGISTRY_MIRROR} -u ${DOCKER_REGISTRY_USER} -p ${DOCKER_REGISTRY_PASS}
+    - docker build . -t ${IMAGE_NAME}:${IMAGE_TAG}
+    - docker push ${IMAGE_NAME}:${IMAGE_TAG}
+    - docker rmi ${IMAGE_NAME}:${IMAGE_TAG}
+  tags:
+    - buildx
+
+build docker image dev:
+  extends: .build-docker
+  except:
+    - master
+    - tags
+  when: manual
+  variables:
+    IMAGE_NAME: ${DOCKER_REGISTRY_MIRROR}/basalam/${PROJECT_NAME}/dev
+    IMAGE_TAG: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}
+
+build docker image master:
+  extends: .build-docker
+  only:
+    - tags
+  variables:
+    IMAGE_NAME: ${DOCKER_REGISTRY_MIRROR}/basalam/${PROJECT_NAME}/master
+    IMAGE_TAG: ${CI_COMMIT_TAG}
+  before_script:
+    - bash -c "if [[ ${CI_COMMIT_TAG} =~ ${SEMVER_REGEX} ]]; then exit 0; else exit 1; fi"
