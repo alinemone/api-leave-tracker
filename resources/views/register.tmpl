@@ -1,0 +1,33 @@
+{{ define "register.tmpl" }}
+{{ template "partials/header.tmpl" . }}
+<div class="auth-wrap">
+    <h1 class="auth-title">{{ trans "register.title" }}</h1>
+
+    {{ if .error }}<div class="alert error">{{ .error }}</div>{{ end }}
+
+    <form action="/register" method="POST">
+        <label class="field-label">{{ trans "member.field.name" }} <span class="req">*</span></label>
+        <input class="field" type="text" name="name" value="{{ .name }}" required>
+
+        <label class="field-label">{{ trans "member.field.mobile" }} <span class="req">*</span></label>
+        <input class="field" type="text" name="mobile" value="{{ .mobile }}" required>
+
+        <label class="field-label">{{ trans "register.field.password" }} <span class="req">*</span></label>
+        <div class="field-password">
+            <input class="field" type="password" id="pwd" name="password" required>
+            <button type="button" class="eye" onclick="togglePwd()" aria-label="toggle password">&#128065;</button>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">{{ trans "register.submit" }}</button>
+    </form>
+
+    <p class="auth-alt">{{ trans "register.have_account" }} <a href="/login">{{ trans "login.submit" }}</a></p>
+</div>
+<script>
+    function togglePwd() {
+        var p = document.getElementById('pwd');
+        p.type = (p.type === 'password') ? 'text' : 'password';
+    }
+</script>
+{{ template "partials/footer.tmpl" . }}
+{{ end }}

@@ -1,0 +1,139 @@
+{{ define "team_show.tmpl" }}
+{{ template "partials/header.tmpl" . }}
+
+{{ if .success }}<div class="alert success">{{ trans "common.success" }}</div>{{ end }}
+{{ if .error }}<div class="alert error">{{ .error }}</div>{{ end }}
+
+<section class="card">
+    <h2>{{ trans "member.add_title" }}</h2>
+    <form action="/teams/{{ .team.ID }}" method="GET">
+        <div class="row">
+            <label>{{ trans "member.search_label" }}</label>
+            <input type="text" name="q" value="{{ .q }}" placeholder="{{ trans "member.search_ph" }}">
+        </div>
+        <button type="submit" class="btn btn-outline">{{ trans "member.search_btn" }}</button>
+    </form>
+    {{ if .q }}
+        {{ if .searchResults }}
+        <table style="margin-top:14px">
+            <thead><tr><th>{{ trans "member.field.name" }}</th><th>{{ trans "member.field.mobile" }}</th><th></th></tr></thead>
+            <tbody>
+            {{ range .searchResults }}
+                <tr>
+                    <td>{{ .Name }}</td>
+                    <td>{{ .Mobile }}</td>
+                    <td>
+                        <form action="/teams/{{ $.team.ID }}/members" method="POST" style="margin:0;display:flex;gap:8px;align-items:center">
+                            <input type="hidden" name="user_id" value="{{ .UserID }}">
+                            <label style="font-size:12px;color:var(--muted)"><input type="checkbox" name="is_manager" value="1" style="width:auto"> {{ trans "member.is_manager" }}</label>
+                            <button type="submit" class="btn-link">{{ trans "member.submit" }}</button>
+                        </form>
+                    </td>
+                </tr>
+            {{ end }}
+            </tbody>
+        </table>
+        {{ else }}
+            <p class="empty">{{ trans "member.no_results" }}</p>
+        {{ end }}
+    {{ end }}
+    <p style="color:var(--muted);font-size:12px;margin:10px 0 0">{{ trans "member.add_hint" }}</p>
+</section>
+
+<section class="card">
+    <h2>{{ trans "member.list_title" }}</h2>
+    {{ if .members }}
+    <table>
+        <thead><tr><th>{{ trans "member.field.name" }}</th><th>{{ trans "member.field.mobile" }}</th><th>{{ trans "team.role" }}</th><th></th></tr></thead>
+        <tbody>
+        {{ range .members }}
+            <tr>
+                <td>{{ .Name }}</td>
+                <td>{{ .Mobile }}</td>
+                <td>{{ if .IsManager }}{{ trans "team.role_manager" }}{{ else }}{{ trans "team.role_member" }}{{ end }}</td>
+                <td style="display:flex;gap:10px;align-items:center">
+                    <form action="/teams/{{ $.team.ID }}/members/set-manager" method="POST" style="margin:0">
+                        <input type="hidden" name="user_id" value="{{ .UserID }}">
+                        {{ if .IsManager }}
+                        <input type="hidden" name="make" value="0">
+                        <button type="submit" class="btn-link">{{ trans "member.remove_manager" }}</button>
+                        {{ else }}
+                        <input type="hidden" name="make" value="1">
+                        <button type="submit" class="btn-link">{{ trans "member.make_manager" }}</button>
+                        {{ end }}
+                    </form>
+                    <form action="/teams/{{ $.team.ID }}/members/delete" method="POST" style="margin:0" onsubmit="return confirm('{{ trans "member.confirm_remove" }}')">
+                        <input type="hidden" name="user_id" value="{{ .UserID }}">
+                        <button type="submit" class="btn-link danger">{{ trans "member.remove" }}</button>
+                    </form>
+                </td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+        <p class="empty">{{ trans "member.empty" }}</p>
+    {{ end }}
+</section>
+
+<section class="card">
+    <h2>{{ trans "member.requests_title" }}</h2>
+    {{ if .pending }}
+    <table>
+        <thead><tr><th>{{ trans "member.field.name" }}</th><th>{{ trans "member.field.mobile" }}</th><th></th></tr></thead>
+        <tbody>
+        {{ range .pending }}
+            <tr>
+                <td>{{ .Name }}</td>
+                <td>{{ .Mobile }}</td>
+                <td style="display:flex;gap:12px">
+                    <form action="/teams/{{ $.team.ID }}/members/approve" method="POST" style="margin:0">
+                        <input type="hidden" name="user_id" value="{{ .UserID }}">
+                        <button type="submit" class="btn-link">{{ trans "member.approve" }}</button>
+                    </form>
+                    <form action="/teams/{{ $.team.ID }}/members/delete" method="POST" style="margin:0" onsubmit="return confirm('{{ trans "member.confirm_reject" }}')">
+                        <input type="hidden" name="user_id" value="{{ .UserID }}">
+                        <button type="submit" class="btn-link danger">{{ trans "member.reject" }}</button>
+                    </form>
+                </td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+        <p class="empty">{{ trans "member.no_requests" }}</p>
+    {{ end }}
+</section>
+
+<section class="card">
+    <h2>{{ trans "team.report_title" }}</h2>
+    {{ if .leaves }}
+    <table>
+        <thead><tr><th>{{ trans "leave.col.name" }}</th><th>{{ trans "leave.col.type" }}</th><th>{{ trans "leave.col.date" }}</th><th>{{ trans "leave.col.hour" }}</th></tr></thead>
+        <tbody>
+        {{ range .leaves }}
+            <tr>
+                <td>{{ .UserName }}</td>
+                <td>{{ if eq .Type "daily" }}{{ trans "leave.type.daily" }}{{ else }}{{ trans "leave.type.hourly" }}{{ end }}</td>
+                <td>{{ jalaliLong .StartAt }}</td>
+                <td>{{ if eq .Type "hourly" }}{{ clock .StartAt }} {{ trans "leave.hour_sep" }} {{ clock .EndAt }}{{ else }}{{ trans "common.dash" }}{{ end }}</td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+        <p class="empty">{{ trans "leave.empty_report" }}</p>
+    {{ end }}
+
+    {{ with .pagination }}
+    {{ if or .HasPrev .HasNext }}
+    <div class="pager">
+        {{ if .HasPrev }}<a href="/teams/{{ $.team.ID }}?page={{ .PrevPage }}">{{ trans "pager.prev" }}</a>{{ end }}
+        <span>{{ trans "pager.page" }} {{ .Page }}</span>
+        {{ if .HasNext }}<a href="/teams/{{ $.team.ID }}?page={{ .NextPage }}">{{ trans "pager.next" }}</a>{{ end }}
+    </div>
+    {{ end }}
+    {{ end }}
+</section>
+{{ template "partials/footer.tmpl" . }}
+{{ end }}

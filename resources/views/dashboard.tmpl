@@ -1,0 +1,51 @@
+{{ define "dashboard.tmpl" }}
+{{ template "partials/header.tmpl" . }}
+
+{{ if .success }}<div class="alert success">{{ trans "dashboard.reset_done" }}</div>{{ end }}
+{{ if .error }}<div class="alert error">{{ trans "team.errors.forbidden" }}</div>{{ end }}
+
+<p style="color:var(--muted);margin:0 4px 12px">{{ trans "dashboard.period" }}: {{ .jMonthName }} {{ .jYear }}</p>
+
+{{ if .teams }}
+{{ range .teams }}
+<section class="card">
+    <h2>{{ .name }}</h2>
+    {{ if .members }}
+    <table>
+        <thead>
+            <tr>
+                <th>{{ trans "dashboard.col_member" }}</th>
+                <th>{{ trans "dashboard.col_month" }}</th>
+                <th>{{ trans "dashboard.col_year" }}</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{ range .members }}
+            <tr>
+                <td>{{ .name }}</td>
+                <td>{{ .monthDays }} {{ trans "dashboard.days" }} / {{ .monthHours }}</td>
+                <td>{{ .yearDays }} {{ trans "dashboard.days" }} / {{ .yearHours }}</td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+        <p class="empty">{{ trans "member.empty" }}</p>
+    {{ end }}
+
+    <form action="/teams/{{ .teamID }}/reset" method="POST" onsubmit="return confirm('{{ trans "dashboard.reset_confirm" }}')" style="margin-top:14px">
+        <div class="row">
+            <label>{{ trans "dashboard.reset_title" }}</label>
+            <select name="year">
+                {{ range $.years }}<option value="{{ . }}">{{ . }}</option>{{ end }}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-outline">{{ trans "dashboard.reset_btn" }}</button>
+    </form>
+</section>
+{{ end }}
+{{ else }}
+<section class="card"><p class="empty">{{ trans "dashboard.no_teams" }}</p></section>
+{{ end }}
+{{ template "partials/footer.tmpl" . }}
+{{ end }}

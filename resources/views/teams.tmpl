@@ -1,0 +1,83 @@
+{{ define "teams.tmpl" }}
+{{ template "partials/header.tmpl" . }}
+
+{{ if .success }}<div class="alert success">{{ trans "common.success" }}</div>{{ end }}
+{{ if .error }}<div class="alert error">{{ .error }}</div>{{ end }}
+
+<section class="card">
+    <h2>{{ trans "team.new_title" }}</h2>
+    <form action="/teams" method="POST">
+        <div class="row">
+            <label>{{ trans "team.field.name" }}</label>
+            <input type="text" name="name" required>
+        </div>
+        <div class="row">
+            <label>{{ trans "team.field.webhook" }}</label>
+            <input type="text" name="webhook_url" placeholder="https://...">
+            <small style="color:var(--muted);font-size:12px">{{ trans "team.webhook_hint" }}</small>
+        </div>
+        <button type="submit" class="btn btn-primary">{{ trans "team.submit" }}</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>{{ trans "team.list_title" }}</h2>
+    {{ if .teams }}
+    <table>
+        <thead><tr><th>{{ trans "team.field.name" }}</th><th>{{ trans "team.role" }}</th><th></th></tr></thead>
+        <tbody>
+        {{ range .teams }}
+            <tr>
+                <td>{{ .Name }}</td>
+                <td>{{ if .IsManager }}{{ trans "team.role_manager" }}{{ else }}{{ trans "team.role_member" }}{{ end }}</td>
+                <td style="display:flex;gap:12px">
+                    {{ if .IsManager }}
+                    <a class="btn-link" href="/teams/{{ .TeamID }}">{{ trans "team.manage" }}</a>
+                    <a class="btn-link" href="/teams/{{ .TeamID }}/edit">{{ trans "common.edit" }}</a>
+                    <form action="/teams/{{ .TeamID }}/delete" method="POST" style="margin:0" onsubmit="return confirm('{{ trans "team.confirm_delete" }}')">
+                        <button type="submit" class="btn-link danger">{{ trans "common.delete" }}</button>
+                    </form>
+                    {{ else }}
+                    <span class="empty" style="padding:0">—</span>
+                    {{ end }}
+                </td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+        <p class="empty">{{ trans "team.empty" }}</p>
+    {{ end }}
+</section>
+
+<section class="card">
+    <h2>{{ trans "team.others_title" }}</h2>
+    {{ if .joinable }}
+    <table>
+        <thead><tr><th>{{ trans "team.field.name" }}</th><th></th></tr></thead>
+        <tbody>
+        {{ range .joinable }}
+            <tr>
+                <td>{{ .Name }}</td>
+                <td style="display:flex;gap:10px;align-items:center">
+                    {{ if .Pending }}
+                    <span class="empty" style="padding:0">{{ trans "team.pending" }}</span>
+                    <form action="/teams/{{ .TeamID }}/cancel-join" method="POST" style="margin:0">
+                        <button type="submit" class="btn-link danger">{{ trans "team.cancel_request" }}</button>
+                    </form>
+                    {{ else }}
+                    <form action="/teams/{{ .TeamID }}/join" method="POST" style="margin:0">
+                        <button type="submit" class="btn-link">{{ trans "team.join" }}</button>
+                    </form>
+                    {{ end }}
+                </td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+        <p class="empty">{{ trans "team.no_others" }}</p>
+    {{ end }}
+</section>
+{{ template "partials/footer.tmpl" . }}
+{{ end }}

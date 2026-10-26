@@ -1,0 +1,36 @@
+{{ define "login.tmpl" }}
+{{ template "partials/header.tmpl" . }}
+<div class="auth-wrap">
+    <h1 class="auth-title">{{ trans "login.title" }}</h1>
+
+    {{ if .success }}<div class="alert success">{{ .success }}</div>{{ end }}
+    {{ if .error }}<div class="alert error">{{ .error }}</div>{{ end }}
+
+    <form action="/login" method="POST">
+        <label class="field-label">{{ trans "login.field.mobile" }} <span class="req">*</span></label>
+        <input class="field" type="text" name="mobile" required>
+
+        <label class="field-label">{{ trans "login.field.password" }} <span class="req">*</span></label>
+        <div class="field-password">
+            <input class="field" type="password" id="pwd" name="password" required>
+            <button type="button" class="eye" onclick="togglePwd()" aria-label="toggle password">&#128065;</button>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">{{ trans "login.submit" }}</button>
+    </form>
+
+    <p class="auth-alt">{{ trans "login.register_prompt" }} <a href="/register">{{ trans "login.register_cta" }}</a></p>
+
+    <div class="divider">{{ trans "login.or" }}</div>
+    <a class="btn btn-outline btn-block" href="/auth/basalam/redirect">{{ trans "login.button" }}</a>
+
+    <p class="auth-forgot"><a href="/register">{{ trans "login.forgot" }}</a></p>
+</div>
+<script>
+    function togglePwd() {
+        var p = document.getElementById('pwd');
+        p.type = (p.type === 'password') ? 'text' : 'password';
+    }
+</script>
+{{ template "partials/footer.tmpl" . }}
+{{ end }}

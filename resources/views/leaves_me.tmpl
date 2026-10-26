@@ -1,0 +1,141 @@
+{{ define "leaves_me.tmpl" }}
+{{ template "partials/header.tmpl" . }}
+<link rel="stylesheet" href="/css/jalalidatepicker.min.css">
+<script src="/js/jalalidatepicker.min.js"></script>
+
+{{ if .success }}<div class="alert success">{{ trans "common.success" }}</div>{{ end }}
+{{ if .error }}<div class="alert error">{{ .error }}</div>{{ end }}
+
+<section class="card">
+    <h2>{{ trans "leave.my_summary" }}</h2>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px;background:var(--primary-050);border-radius:10px;padding:12px 14px">
+            <div style="color:var(--muted);font-size:12px">{{ trans "dashboard.col_month" }} ({{ .jMonthName }})</div>
+            <div style="font-weight:800;color:var(--primary)">{{ .monthDays }} {{ trans "dashboard.days" }} / {{ .monthHours }}</div>
+        </div>
+        <div style="flex:1;min-width:140px;background:var(--primary-050);border-radius:10px;padding:12px 14px">
+            <div style="color:var(--muted);font-size:12px">{{ trans "dashboard.col_year" }} ({{ .jYear }})</div>
+            <div style="font-weight:800;color:var(--primary)">{{ .yearDays }} {{ trans "dashboard.days" }} / {{ .yearHours }}</div>
+        </div>
+    </div>
+</section>
+
+<section class="card">
+    <h2>{{ trans "leave.new_title" }}</h2>
+    <form action="/leaves" method="POST" onsubmit="return buildLeave()">
+        <div class="row">
+            <label>{{ trans "leave.field.target" }}</label>
+            <select id="target" name="target" onchange="toggleTarget()">
+                <option value="personal">{{ trans "leave.target.personal" }}</option>
+                <option value="team">{{ trans "leave.target.team" }}</option>
+            </select>
+        </div>
+        <div class="row" id="teamRow" style="display:none">
+            <label>{{ trans "leave.field.team" }}</label>
+            <select name="team_id">
+                {{ range .teams }}<option value="{{ .TeamID }}">{{ .Name }}</option>{{ end }}
+            </select>
+        </div>
+        <div class="row">
+            <label>{{ trans "leave.field.type" }}</label>
+            <select id="leaveType" onchange="toggleHourly()">
+                <option value="daily">{{ trans "leave.type.daily" }}</option>
+                <option value="hourly">{{ trans "leave.type.hourly" }}</option>
+            </select>
+        </div>
+        <div class="row">
+            <label>{{ trans "leave.field.date" }}</label>
+            <input type="text" id="leaveDate" data-jdp data-jdp-only-date autocomplete="off" placeholder="انتخاب تاریخ" required>
+        </div>
+        <div class="row" id="hourlyFields" style="display:none">
+            <label>{{ trans "leave.field.from_hour" }}</label>
+            <input type="time" id="startTime" value="09:00">
+            <label>{{ trans "leave.field.to_hour" }}</label>
+            <input type="time" id="endTime" value="17:00">
+        </div>
+        <input type="hidden" name="type" id="leaveTypeHidden">
+        <input type="hidden" name="start_at" id="startAt">
+        <input type="hidden" name="end_at" id="endAt">
+        <button type="submit" class="btn btn-primary">{{ trans "leave.submit" }}</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>{{ trans "leave.my_list_title" }}</h2>
+    {{ if .leaves }}
+    <div class="table-scroll">
+    <table>
+        <thead>
+            <tr>
+                <th>{{ trans "leave.col.target" }}</th>
+                <th>{{ trans "leave.col.type" }}</th>
+                <th>{{ trans "leave.col.date" }}</th>
+                <th>{{ trans "leave.col.hour" }}</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {{ range .leaves }}
+            <tr>
+                <td>
+                    {{ if .TeamName }}{{ trans "leave.target.team" }}: {{ .TeamName }}
+                    {{ else }}{{ trans "leave.target.personal" }}{{ end }}
+                </td>
+                <td>{{ if eq .Type "daily" }}{{ trans "leave.type.daily" }}{{ else }}{{ trans "leave.type.hourly" }}{{ end }}</td>
+                <td>{{ jalaliLong .StartAt }}</td>
+                <td>{{ if eq .Type "hourly" }}{{ clock .StartAt }} {{ trans "leave.hour_sep" }} {{ clock .EndAt }}{{ else }}{{ trans "common.dash" }}{{ end }}</td>
+                <td>
+                    <form action="/leaves/delete" method="POST" style="margin:0" onsubmit="return confirm('{{ trans "leave.confirm_delete" }}')">
+                        <input type="hidden" name="id" value="{{ .ID }}">
+                        <button type="submit" class="btn-link danger">{{ trans "leave.delete" }}</button>
+                    </form>
+                </td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+    </div>
+    {{ else }}
+        <p class="empty">{{ trans "leave.empty_me" }}</p>
+    {{ end }}
+
+    {{ with .pagination }}
+    {{ if or .HasPrev .HasNext }}
+    <div class="pager">
+        {{ if .HasPrev }}<a href="/leaves-me?page={{ .PrevPage }}">{{ trans "pager.prev" }}</a>{{ end }}
+        <span>{{ trans "pager.page" }} {{ .Page }}</span>
+        {{ if .HasNext }}<a href="/leaves-me?page={{ .NextPage }}">{{ trans "pager.next" }}</a>{{ end }}
+    </div>
+    {{ end }}
+    {{ end }}
+</section>
+
+<script>
+    jalaliDatepicker.startWatch({ time: false, persianDigits: false, autoHide: true });
+    function toggleTarget() {
+        var t = document.getElementById('target').value;
+        document.getElementById('teamRow').style.display = (t === 'team') ? 'flex' : 'none';
+    }
+    function toggleHourly() {
+        var type = document.getElementById('leaveType').value;
+        document.getElementById('hourlyFields').style.display = (type === 'hourly') ? 'flex' : 'none';
+    }
+    function buildLeave() {
+        var type = document.getElementById('leaveType').value;
+        var date = document.getElementById('leaveDate').value;
+        if (!date) { alert('{{ trans "leave.errors.no_date" }}'); return false; }
+        document.getElementById('leaveTypeHidden').value = type;
+        if (type === 'daily') {
+            document.getElementById('startAt').value = date;
+            document.getElementById('endAt').value = date;
+        } else {
+            var s = document.getElementById('startTime').value;
+            var e = document.getElementById('endTime').value;
+            document.getElementById('startAt').value = date + ' ' + s + ':00';
+            document.getElementById('endAt').value = date + ' ' + e + ':00';
+        }
+        return true;
+    }
+</script>
+{{ template "partials/footer.tmpl" . }}
+{{ end }}

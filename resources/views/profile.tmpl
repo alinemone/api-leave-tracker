@@ -1,0 +1,33 @@
+{{ define "profile.tmpl" }}
+{{ template "partials/header.tmpl" . }}
+<div class="auth-wrap">
+    <h1 class="auth-title">{{ trans "profile.title" }}</h1>
+
+    {{ if .success }}<div class="alert success">{{ trans "common.success" }}</div>{{ end }}
+    {{ if .error }}<div class="alert error">{{ .error }}</div>{{ end }}
+
+    <form action="/profile" method="POST">
+        <label class="field-label">{{ trans "profile.field.name" }} <span class="req">*</span></label>
+        <input class="field" type="text" name="name" value="{{ .user.Name }}" required>
+
+        <label class="field-label">{{ trans "profile.field.mobile" }} <span class="req">*</span></label>
+        <input class="field" type="text" name="mobile" value="{{ .user.Mobile }}" required>
+
+        <label class="field-label">{{ trans "profile.field.password" }}</label>
+        <div class="field-password">
+            <input class="field" type="password" id="pwd" name="password" autocomplete="new-password">
+            <button type="button" class="eye" onclick="togglePwd()" aria-label="toggle password">&#128065;</button>
+        </div>
+        <p style="color:var(--muted);font-size:12px;margin:-8px 0 16px">{{ trans "profile.password_hint" }}</p>
+
+        <button type="submit" class="btn btn-primary btn-block">{{ trans "profile.submit" }}</button>
+    </form>
+</div>
+<script>
+    function togglePwd() {
+        var p = document.getElementById('pwd');
+        p.type = (p.type === 'password') ? 'text' : 'password';
+    }
+</script>
+{{ template "partials/footer.tmpl" . }}
+{{ end }}

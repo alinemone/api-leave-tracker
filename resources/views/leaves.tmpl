@@ -1,0 +1,40 @@
+{{ define "leaves.tmpl" }}
+{{ template "partials/header.tmpl" . }}
+
+<section class="card">
+    <h2>{{ trans "leave.report_title" }}</h2>
+    {{ if .reports }}
+    <table>
+        <thead>
+            <tr>
+                <th>{{ trans "leave.col.name" }}</th>
+                <th>{{ trans "leave.col.total_days" }}</th>
+                <th>{{ trans "leave.col.total_hours" }}</th>
+            </tr>
+        </thead>
+        <tbody>
+        {{ range .reports }}
+            <tr>
+                <td>{{ .UserName }}</td>
+                <td>{{ .TotalDays }}</td>
+                <td>{{ .TotalHours }}</td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+    {{ else }}
+        <p class="empty">{{ trans "leave.empty_report" }}</p>
+    {{ end }}
+
+    {{ with .pagination }}
+    {{ if or .HasPrev .HasNext }}
+    <div class="pager">
+        {{ if .HasPrev }}<a href="/leaves?page={{ .PrevPage }}">{{ trans "pager.prev" }}</a>{{ end }}
+        <span>{{ trans "pager.page" }} {{ .Page }}</span>
+        {{ if .HasNext }}<a href="/leaves?page={{ .NextPage }}">{{ trans "pager.next" }}</a>{{ end }}
+    </div>
+    {{ end }}
+    {{ end }}
+</section>
+{{ template "partials/footer.tmpl" . }}
+{{ end }}

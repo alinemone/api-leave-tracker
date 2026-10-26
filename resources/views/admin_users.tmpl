@@ -1,0 +1,41 @@
+{{ define "admin_users.tmpl" }}
+{{ template "partials/header.tmpl" . }}
+
+{{ if .success }}<div class="alert success">{{ trans "common.success" }}</div>{{ end }}
+{{ if .error }}<div class="alert error">{{ trans "admin.error" }}</div>{{ end }}
+
+<section class="card">
+    <h2>{{ trans "admin_reset.title" }}</h2>
+    <form action="/admin/reset" method="POST" onsubmit="return confirm('{{ trans "admin_reset.confirm" }}')">
+        <div class="row">
+            <label>{{ trans "dashboard.reset_title" }}</label>
+            <select name="year">
+                {{ range .years }}<option value="{{ . }}">{{ . }}</option>{{ end }}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-outline danger">{{ trans "admin_reset.btn" }}</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>{{ trans "admin.users_title" }}</h2>
+    <table>
+        <thead><tr><th>{{ trans "member.field.name" }}</th><th>{{ trans "member.field.mobile" }}</th><th>{{ trans "admin.role" }}</th><th></th></tr></thead>
+        <tbody>
+        {{ range .users }}
+            <tr>
+                <td>{{ .Name }}</td>
+                <td>{{ .Mobile }}</td>
+                <td>{{ if .IsAdmin }}{{ trans "admin.admin" }}{{ else }}{{ trans "admin.user" }}{{ end }}</td>
+                <td>
+                    <form action="/admin/users/{{ .ID }}/toggle-admin" method="POST" style="margin:0">
+                        <button type="submit" class="btn-link">{{ if .IsAdmin }}{{ trans "admin.revoke" }}{{ else }}{{ trans "admin.grant" }}{{ end }}</button>
+                    </form>
+                </td>
+            </tr>
+        {{ end }}
+        </tbody>
+    </table>
+</section>
+{{ template "partials/footer.tmpl" . }}
+{{ end }}

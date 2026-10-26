@@ -1,0 +1,22 @@
+{{ define "team_edit.tmpl" }}
+{{ template "partials/header.tmpl" . }}
+<section class="card" style="max-width:480px">
+    <h2>{{ trans "team.edit_title" }}</h2>
+    <form action="/teams/{{ .team.ID }}/update" method="POST">
+        <div class="row">
+            <label>{{ trans "team.field.name" }}</label>
+            <input type="text" name="name" value="{{ .team.Name }}" required>
+        </div>
+        <div class="row">
+            <label>{{ trans "team.field.webhook" }}</label>
+            <input type="text" name="webhook_url" value="{{ .team.WebhookURL }}" placeholder="https://...">
+            <small style="color:var(--muted);font-size:12px">{{ trans "team.webhook_hint" }}</small>
+        </div>
+        <div class="row">
+            <button type="submit" class="btn btn-primary">{{ trans "common.save" }}</button>
+            <a class="btn-link" href="/teams">{{ trans "common.cancel" }}</a>
+        </div>
+    </form>
+</section>
+{{ template "partials/footer.tmpl" . }}
+{{ end }}
