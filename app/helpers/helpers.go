@@ -1,28 +1,25 @@
 package helpers
 
 import (
+	"errors"
+
 	"github.com/goravel/framework/contracts/http"
-	"github.com/goravel/framework/facades"
-	"golang.org/x/exp/rand"
+
 	"leave/app/models"
-	"time"
 )
 
+// CurrentUser returns the authenticated user that the WebAuth middleware stored
+// on the request context.
 func CurrentUser(ctx http.Context) (*models.User, error) {
-	var user models.User
-	err := facades.Auth(ctx).User(&user)
-	if err != nil {
-		return nil, err
+	value := ctx.Value("user")
+	if value == nil {
+		return nil, errors.New("user not found in context")
 	}
-	return &user, nil
-}
 
-func RandomNumbers(length int) string {
-	rand.Seed(uint64(time.Now().UnixNano()))
-	digits := "0123456789"
-	result := make([]byte, length)
-	for i := 0; i < length; i++ {
-		result[i] = digits[rand.Intn(len(digits))]
+	user, ok := value.(*models.User)
+	if !ok {
+		return nil, errors.New("invalid user in context")
 	}
-	return string(result)
+
+	return user, nil
 }

@@ -20,9 +20,9 @@ func (r *M20250811053716CreateLeavesTable) Up() error {
 			table.Integer("user_id")
 			table.Foreign("user_id").References("id").On("users").CascadeOnDelete()
 			table.Enum("type", []any{"daily", "hourly"})
-			table.DateTimeTz("start_at")
-			table.DateTimeTz("end_at")
-			table.TimestampsTz()
+			table.DateTime("start_at")
+			table.DateTime("end_at")
+			table.Timestamps()
 			table.SoftDeletes()
 		})
 	}

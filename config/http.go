@@ -6,6 +6,8 @@ import (
 	"github.com/goravel/framework/facades"
 	"github.com/goravel/gin"
 	ginfacades "github.com/goravel/gin/facades"
+
+	"leave/app/helpers"
 )
 
 func init() {
@@ -24,7 +26,13 @@ func init() {
 				},
 				// Optional, default is http/template
 				"template": func() (render.HTMLRender, error) {
-					return gin.DefaultTemplate()
+					return gin.NewTemplate(gin.RenderOptions{
+						Delims: &gin.Delims{
+							Left:  "{{",
+							Right: "}}",
+						},
+						FuncMap: helpers.TemplateFuncs(),
+					})
 				},
 			},
 		},
@@ -34,8 +42,8 @@ func init() {
 		"host": config.Env("APP_HOST", "127.0.0.1"),
 		// HTTP Port
 		"port": config.Env("APP_PORT", "3000"),
-		// HTTP Timeout, default is 3 seconds
-		"request_timeout": 3,
+		// HTTP Timeout in seconds (3 is too low; a slightly slow DB call trips a 408).
+		"request_timeout": config.Env("HTTP_REQUEST_TIMEOUT", 30),
 		// HTTPS Configuration
 		"tls": map[string]any{
 			// HTTPS Host

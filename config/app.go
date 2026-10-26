@@ -7,15 +7,11 @@ import (
 	"github.com/goravel/framework/contracts/foundation"
 	"github.com/goravel/framework/crypt"
 	"github.com/goravel/framework/database"
-	"github.com/goravel/framework/event"
 	"github.com/goravel/framework/facades"
 	"github.com/goravel/framework/filesystem"
-	"github.com/goravel/framework/grpc"
 	"github.com/goravel/framework/hash"
 	"github.com/goravel/framework/http"
 	"github.com/goravel/framework/log"
-	"github.com/goravel/framework/mail"
-	"github.com/goravel/framework/queue"
 	"github.com/goravel/framework/route"
 	"github.com/goravel/framework/schedule"
 	"github.com/goravel/framework/session"
@@ -63,20 +59,20 @@ func init() {
 		// The application locale determines the default locale that will be used
 		// by the translation service provider. You are free to set this value
 		// to any of the locales which will be supported by the application.
-		"locale": "en",
+		"locale": "fa",
 
 		// Application Fallback Locale
 		//
 		// The fallback locale determines the locale to use when the current one
 		// is not available. You may change the value to correspond to any of
 		// the language folders that are provided through your application.
-		"fallback_locale": "en",
+		"fallback_locale": "fa",
 
 		// Application Lang Path
 		//
 		// The path to the language files for the application. You may change
 		// the path to a different directory if you would like to customize it.
-		"lang_path": "lang",
+		"lang_path": "resources/lang",
 
 		// Encryption Key
 		//
@@ -98,10 +94,6 @@ func init() {
 			&http.ServiceProvider{},
 			&route.ServiceProvider{},
 			&schedule.ServiceProvider{},
-			&event.ServiceProvider{},
-			&queue.ServiceProvider{},
-			&grpc.ServiceProvider{},
-			&mail.ServiceProvider{},
 			&auth.ServiceProvider{},
 			&hash.ServiceProvider{},
 			&crypt.ServiceProvider{},
@@ -113,10 +105,7 @@ func init() {
 			&providers.AppServiceProvider{},
 			&providers.AuthServiceProvider{},
 			&providers.RouteServiceProvider{},
-			&providers.GrpcServiceProvider{},
 			&providers.ConsoleServiceProvider{},
-			&providers.QueueServiceProvider{},
-			&providers.EventServiceProvider{},
 			&providers.ValidationServiceProvider{},
 			&providers.DatabaseServiceProvider{},
 			&gin.ServiceProvider{},

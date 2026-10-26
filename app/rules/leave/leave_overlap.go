@@ -1,9 +1,16 @@
 package leave
 
 import (
+	"leave/app/models"
+	"strconv"
+
 	"github.com/goravel/framework/contracts/validation"
 	"github.com/goravel/framework/facades"
-	"strconv"
+)
+
+const (
+	LeaveTypeDaily  = "daily"
+	LeaveTypeHourly = "hourly"
 )
 
 type LeaveOverlap struct {
@@ -30,17 +37,24 @@ func (receiver *LeaveOverlap) Passes(data validation.Data, val any, options ...a
 		return false
 	}
 
-	start, _ := data.Get("start_at")
-	end, _ := data.Get("end_at")
-	leaveType, _ := data.Get("type")
+	start, startExists := data.Get("start_at")
+	end, endExists := data.Get("end_at")
+	if !startExists || !endExists {
+		return false
+	}
 
 	startStr, ok := start.(string)
-	if !ok {
+	if !ok || startStr == "" {
 		return false
 	}
 
 	endStr, ok := end.(string)
-	if !ok {
+	if !ok || endStr == "" {
+		return false
+	}
+
+	leaveType, typeExists := data.Get("type")
+	if !typeExists {
 		return false
 	}
 
@@ -50,26 +64,38 @@ func (receiver *LeaveOverlap) Passes(data validation.Data, val any, options ...a
 	}
 
 	// Check based on leave type
-	if typeStr == "daily" {
+	if typeStr == LeaveTypeDaily {
 		// For daily leaves: no other leave should exist on the same day
-		count, err := facades.Orm().Query().Table("leaves").
+		query := facades.Orm().Query().Model(&models.Leave{}).
 			Where("user_id = ?", userID).
-			Where("DATE(start_at) <= DATE(?)", endStr).
-			Where("DATE(end_at) >= DATE(?)", startStr).
-			Count()
+			Where("start_at::date <= (?)::date", endStr).
+			Where("end_at::date >= (?)::date", startStr)
+
+		// Exclude current record if it's an update
+		if leaveID, exists := data.Get("id"); exists {
+			query = query.Where("id != ?", leaveID)
+		}
+
+		count, err := query.Count()
 
 		if err != nil {
 			return false
 		}
 
 		return count == 0
-	} else if typeStr == "hourly" {
+	} else if typeStr == LeaveTypeHourly {
 		// For hourly leaves: no duplicate leave on same day and overlapping time
-		count, err := facades.Orm().Query().Table("leaves").
+		query := facades.Orm().Query().Model(&models.Leave{}).
 			Where("user_id = ?", userID).
 			Where("start_at < ?", endStr).
-			Where("end_at > ?", startStr).
-			Count()
+			Where("end_at > ?", startStr)
+
+		// Exclude current record if it's an update
+		if leaveID, exists := data.Get("id"); exists {
+			query = query.Where("id != ?", leaveID)
+		}
+
+		count, err := query.Count()
 
 		if err != nil {
 			return false

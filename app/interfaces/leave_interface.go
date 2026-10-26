@@ -1,14 +1,20 @@
 package interfaces
 
 import (
+	"time"
+
 	response "leave/app/http/responses/leave"
 	"leave/app/models"
-	"time"
 )
 
 type LeaveInterface interface {
-	Report(page int, perPage int) ([]response.LeaveReportResponse, int64, error)
-	GetLeavesByUserID(userID uint, page int, perPage int) ([]models.Leave, int64, error)
-	Create(UserId uint, Type string, StartAt time.Time, EndAt time.Time) (models.Leave, error)
-	Delete(UserId uint, ID uint) error
+	Create(userID uint, leaveType string, startAt time.Time, endAt time.Time, teamID *uint) (models.Leave, error)
+	MyLeaves(userID uint, page int, perPage int) ([]response.MyLeaveRow, int64, error)
+	MyTotals(userID uint, from time.Time, to time.Time) (response.AggRow, error)
+	TeamLeaves(teamID uint, page int, perPage int) ([]response.TeamLeaveRow, int64, error)
+	LeaveTotalsByUser(teamID uint, from time.Time, to time.Time) ([]response.AggRow, error)
+	ResetTeam(teamID uint, from time.Time, to time.Time) (int64, error)
+	ResetAll(from time.Time, to time.Time) (int64, error)
+	FindByUser(userID uint, id uint) (models.Leave, error)
+	Delete(userID uint, id uint) error
 }

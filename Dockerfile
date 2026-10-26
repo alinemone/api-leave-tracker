@@ -9,7 +9,9 @@ ENV GO111MODULE=on \
 
 WORKDIR /build
 COPY . .
-RUN go mod tidy
+
+# Build directly: `go build` downloads only the modules actually compiled
+# (avoids pulling unused/indirect modules like sonic that `go mod download`/`tidy` fetch).
 RUN go build --ldflags "-s -w -extldflags -static" -o main .
 
 FROM alpine:latest

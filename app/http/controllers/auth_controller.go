@@ -1,254 +1,277 @@
 package controllers
 
 import (
-	"leave/app/helpers"
-	"leave/app/http/requests/auth"
-	"leave/app/http/responses"
-	response "leave/app/http/responses/user"
-	"leave/app/models"
-	"leave/services/gap"
-	"time"
+	"crypto/rand"
+	"encoding/hex"
+	"strconv"
+	"strings"
 
 	"github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/facades"
 	"golang.org/x/crypto/bcrypt"
+
+	"leave/app/helpers"
+	authRequest "leave/app/http/requests/auth"
+	"leave/app/models"
+	"leave/services/basalam"
 )
 
 type AuthController struct {
-	// Dependent services
+	basalam *basalam.Client
 }
 
 func NewAuthController() *AuthController {
 	return &AuthController{
-		// Inject services
+		basalam: basalam.NewClient(),
 	}
 }
 
+// knownLoginErrors are the error codes BasalamRedirect/BasalamCallback may emit;
+// each maps to a key under "login.errors.*" in lang/<locale>.json.
+var knownLoginErrors = map[string]bool{
+	"not_configured": true,
+	"state_mismatch": true,
+	"missing_code":   true,
+	"exchange":       true,
+	"whoami":         true,
+	"save_user":      true,
+	"credentials":    true,
+}
+
+// ShowLogin renders the login page (or redirects in if already authenticated).
+func (r *AuthController) ShowLogin(ctx http.Context) http.Response {
+	if session := ctx.Request().Session(); session != nil {
+		if id, ok := session.Get("user_id").(string); ok && id != "" {
+			return ctx.Response().Redirect(http.StatusFound, "/leaves-me")
+		}
+	}
+
+	var errMessage string
+	if code := ctx.Request().Query("error"); knownLoginErrors[code] {
+		errMessage = facades.Lang(ctx).Get("login.errors." + code)
+	}
+
+	var success string
+	if ctx.Request().Query("registered") == "1" {
+		success = facades.Lang(ctx).Get("login.registered")
+	}
+
+	return ctx.Response().View().Make("login.tmpl", map[string]any{
+		"title":   facades.Lang(ctx).Get("app.tagline"),
+		"error":   errMessage,
+		"success": success,
+	})
+}
+
+// Login authenticates a user by mobile + password (manual login).
 func (r *AuthController) Login(ctx http.Context) http.Response {
-	var req auth.LoginRequest
-
-	errors, _ := ctx.Request().ValidateRequest(&req)
-
-	if errors != nil {
-		return ctx.Response().Json(
-			http.StatusUnprocessableEntity,
-			responses.NewErrorResponse(errors),
-		)
+	mobile := helpers.EnglishDigits(strings.TrimSpace(ctx.Request().Input("mobile")))
+	password := ctx.Request().Input("password")
+	if mobile == "" || password == "" {
+		return ctx.Response().Redirect(http.StatusFound, "/login?error=credentials")
 	}
 
 	var user models.User
-
-	if err := facades.Orm().Query().Where("mobile", req.Mobile).First(&user); err != nil {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse(err),
-		)
+	_ = facades.Orm().Query().Where("mobile", mobile).First(&user)
+	if user.ID == 0 || user.Password == "" {
+		return ctx.Response().Redirect(http.StatusFound, "/login?error=credentials")
 	}
 
-	if user.ID == 0 {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse("User not found"),
-		)
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return ctx.Response().Redirect(http.StatusFound, "/login?error=credentials")
 	}
 
-	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
-	if err != nil {
-		return ctx.Response().Json(
-			http.StatusUnauthorized,
-			responses.NewErrorResponse(err),
-		)
-	}
-
-	var (
-		token string
-	)
-
-	token, err = facades.Auth(ctx).LoginUsingID(user.ID)
-
-	if err != nil {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse(err),
-		)
-	}
-
-	return ctx.Response().Success().Json(
-		response.NewLoginResource(user, token),
-	)
+	ctx.Request().Session().Put("user_id", strconv.FormatUint(uint64(user.ID), 10))
+	return ctx.Response().Redirect(http.StatusFound, "/leaves-me")
 }
 
-func (r *AuthController) Register(ctx http.Context) http.Response {
+// ShowRegister renders the public manual user-creation form.
+func (r *AuthController) ShowRegister(ctx http.Context) http.Response {
+	if session := ctx.Request().Session(); session != nil {
+		if id, ok := session.Get("user_id").(string); ok && id != "" {
+			return ctx.Response().Redirect(http.StatusFound, "/leaves-me")
+		}
+	}
+	return ctx.Response().View().Make("register.tmpl", map[string]any{
+		"title": facades.Lang(ctx).Get("register.title"),
+	})
+}
 
-	var req auth.RegisterRequest
+// Register creates a user manually (name + mobile). No login is performed;
+// the user later signs in via Basalam (linked by mobile).
+func (r *AuthController) Register(ctx http.Context) http.Response {
+	var req authRequest.RegisterRequest
 
 	errors, err := ctx.Request().ValidateRequest(&req)
-
 	if err != nil {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse(err),
-		)
+		return r.renderRegisterError(ctx, ctx.Request().Input("name"), ctx.Request().Input("mobile"), debugMessage(ctx, "register.errors.failed", err))
 	}
-
 	if errors != nil {
-		return ctx.Response().Json(
-			http.StatusUnprocessableEntity,
-			responses.NewErrorResponse(errors),
-		)
+		return r.renderRegisterError(ctx, req.Name, req.Mobile, errors.One())
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	// Mobile is always stored with English (ASCII) digits.
+	req.Mobile = helpers.EnglishDigits(strings.TrimSpace(req.Mobile))
 
+	var existing models.User
+	_ = facades.Orm().Query().Where("mobile", req.Mobile).First(&existing)
+	if existing.ID != 0 {
+		return r.renderRegisterError(ctx, req.Name, req.Mobile, facades.Lang(ctx).Get("register.errors.mobile_taken"))
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse(err),
-		)
-
+		facades.Log().Error(err)
+		return r.renderRegisterError(ctx, req.Name, req.Mobile, debugMessage(ctx, "register.errors.failed", err))
 	}
 
-	user := models.User{
-		Name:     req.Name,
-		IsActive: req.IsActive,
-		Mobile:   req.Mobile,
-		Password: string(hashedPassword),
+	user := models.User{Name: req.Name, Mobile: req.Mobile, Password: string(hashed), IsActive: true, IsAdmin: noAdminYet()}
+	if err := facades.Orm().Query().Create(&user); err != nil {
+		facades.Log().Error(err)
+		return r.renderRegisterError(ctx, req.Name, req.Mobile, debugMessage(ctx, "register.errors.failed", err))
 	}
 
-	err = facades.Orm().Query().Create(&user)
-
-	if err != nil {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse(err),
-		)
-	}
-
-	return ctx.Response().Success().Json(
-		response.NewLiteUserResource(user),
-	)
+	return ctx.Response().Redirect(http.StatusFound, "/login?registered=1")
 }
 
-func (r *AuthController) RequestCode(ctx http.Context) http.Response {
-	var req auth.ResetCodeRequest
+func (r *AuthController) renderRegisterError(ctx http.Context, name, mobile, msg string) http.Response {
+	return ctx.Response().View().Make("register.tmpl", map[string]any{
+		"title":  facades.Lang(ctx).Get("register.title"),
+		"error":  msg,
+		"name":   name,
+		"mobile": mobile,
+	})
+}
 
-	errors, _ := ctx.Request().ValidateRequest(&req)
-
-	if errors != nil {
-		return ctx.Response().Json(
-			http.StatusUnprocessableEntity,
-			responses.NewErrorResponse(errors),
-		)
+// BasalamRedirect builds the Basalam SSO URL and redirects the user to it.
+func (r *AuthController) BasalamRedirect(ctx http.Context) http.Response {
+	if !r.basalam.IsConfigured() {
+		return ctx.Response().Redirect(http.StatusFound, "/login?error=not_configured")
 	}
 
+	state, err := randomState()
+	if err != nil {
+		return ctx.Response().Redirect(http.StatusFound, "/login?error=state_mismatch")
+	}
+
+	ctx.Request().Session().Put("oauth_state", state)
+
+	return ctx.Response().Redirect(http.StatusFound, r.basalam.AuthorizationURL(state))
+}
+
+// BasalamCallback handles the OAuth callback: verify state, exchange the code,
+// load the identity, upsert the local user and start the session.
+func (r *AuthController) BasalamCallback(ctx http.Context) http.Response {
+	session := ctx.Request().Session()
+
+	state := ctx.Request().Query("state")
+	expected, _ := session.Get("oauth_state").(string)
+	session.Forget("oauth_state")
+	if state == "" || expected == "" || state != expected {
+		return ctx.Response().Redirect(http.StatusFound, "/login?error=state_mismatch")
+	}
+
+	code := ctx.Request().Query("code")
+	if code == "" {
+		return ctx.Response().Redirect(http.StatusFound, "/login?error=missing_code")
+	}
+
+	token, err := r.basalam.ExchangeCode(code)
+	if err != nil {
+		facades.Log().Error(err)
+		return ctx.Response().Redirect(http.StatusFound, "/login?error=exchange")
+	}
+
+	basalamUser, err := r.basalam.Whoami(token)
+	if err != nil {
+		facades.Log().Error(err)
+		return ctx.Response().Redirect(http.StatusFound, "/login?error=whoami")
+	}
+
+	user, err := upsertUser(basalamUser)
+	if err != nil {
+		facades.Log().Error(err)
+		return ctx.Response().Redirect(http.StatusFound, "/login?error=save_user")
+	}
+
+	session.Put("user_id", strconv.FormatUint(uint64(user.ID), 10))
+
+	return ctx.Response().Redirect(http.StatusFound, "/leaves-me")
+}
+
+// Logout clears the session and returns to the login page.
+func (r *AuthController) Logout(ctx http.Context) http.Response {
+	if session := ctx.Request().Session(); session != nil {
+		session.Forget("user_id")
+		_ = session.Invalidate()
+	}
+
+	return ctx.Response().Redirect(http.StatusFound, "/login")
+}
+
+// upsertUser finds or creates the local user linked to the Basalam account.
+func upsertUser(b basalam.BasalamUser) (*models.User, error) {
 	var user models.User
-	if err := facades.Orm().Query().Where("mobile", req.Mobile).First(&user); err != nil {
-		return ctx.Response().Json(http.StatusInternalServerError, http.Json{
-			"error": err.Error(),
-		})
+
+	// Primary match: by Basalam user id.
+	_ = facades.Orm().Query().Where("basalam_user_id", b.ID).First(&user)
+	if user.ID != 0 {
+		return &user, nil
 	}
 
-	if user.ID == 0 {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse("User not found"),
-		)
+	// Secondary match: link an existing user that shares the same mobile.
+	if b.Mobile != "" {
+		_ = facades.Orm().Query().Where("mobile", b.Mobile).First(&user)
 	}
 
-	code := helpers.RandomNumbers(6)
+	basalamID := b.ID
 
-	gapClient := gap.NewClient()
-	err := gapClient.SendDirectMessage(req.GapUserName, code)
-
-	if err != nil {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse(err),
-		)
+	if user.ID != 0 {
+		user.BasalamUserId = &basalamID
+		if user.Name == "" {
+			user.Name = b.Name
+		}
+		if err := facades.Orm().Query().Save(&user); err != nil {
+			return nil, err
+		}
+		return &user, nil
 	}
 
-	cacheKey := "forgot_password_code:" + req.GapUserName
-	err = facades.Cache().Put(cacheKey, code, 5*time.Minute)
-
-	if err != nil {
-		return nil
+	user = models.User{
+		Name:          b.Name,
+		BasalamUserId: &basalamID,
+		Mobile:        b.Mobile,
+		IsActive:      true,
+		IsAdmin:       noAdminYet(),
+	}
+	if err := facades.Orm().Query().Create(&user); err != nil {
+		return nil, err
 	}
 
-	return ctx.Response().Success().Json(
-		responses.NewPublicResponse(true),
-	)
+	return &user, nil
 }
 
-func (r *AuthController) ForgetPassword(ctx http.Context) http.Response {
-	var req auth.ForgetPasswordRequest
-
-	errors, _ := ctx.Request().ValidateRequest(&req)
-
-	if errors != nil {
-		return ctx.Response().Json(
-			http.StatusUnprocessableEntity,
-			responses.NewErrorResponse(errors),
-		)
+// debugMessage returns the real error text when app.debug is on, otherwise the
+// translated fallback message. Helps diagnose failures without leaking details
+// in production.
+func debugMessage(ctx http.Context, langKey string, err error) string {
+	if err != nil && facades.Config().GetBool("app.debug") {
+		return err.Error()
 	}
-
-	var user models.User
-	if err := facades.Orm().Query().Where("mobile", req.Mobile).First(&user); err != nil {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse(err),
-		)
-	}
-
-	if user.ID == 0 {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse("User not found"),
-		)
-	}
-
-	value := facades.Cache().Get("forgot_password_code:" + req.GapUserName)
-
-	if value == nil {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse("code expired try again reset code"),
-		)
-	}
-
-	if value != req.Code {
-		return ctx.Response().Json(
-			http.StatusUnprocessableEntity,
-			responses.NewErrorResponse("code not match"),
-		)
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-
-	if err != nil {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse(err),
-		)
-	}
-
-	user.Password = string(hashedPassword)
-	err = facades.Orm().Query().Save(&user)
-	if err != nil {
-		return ctx.Response().Json(
-			http.StatusInternalServerError,
-			responses.NewErrorResponse(err),
-		)
-	}
-
-	return ctx.Response().Success().Json(
-		responses.NewPublicResponse(true),
-	)
+	return facades.Lang(ctx).Get(langKey)
 }
 
-func (r *AuthController) Whoami(ctx http.Context) http.Response {
-	currentUser, _ := helpers.CurrentUser(ctx)
+// noAdminYet reports whether the system has no admin user yet (so the first
+// user created becomes the admin).
+func noAdminYet() bool {
+	count, _ := facades.Orm().Query().Model(&models.User{}).Where("is_admin", true).Count()
+	return count == 0
+}
 
-	return ctx.Response().Success().Json(
-		response.NewUserResource(*currentUser),
-	)
+func randomState() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }

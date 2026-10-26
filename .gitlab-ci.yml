@@ -10,6 +10,9 @@ stages:
   stage: build
   image: ${DOCKER_REGISTRY_MIRROR}/basalam/docker:20.10.7-custom
   script:
+    # Reclaim disk from previous builds (runner was running out of space).
+    - docker builder prune -af || true
+    - docker image prune -af || true
     - docker login ${DOCKER_REGISTRY_MIRROR} -u ${DOCKER_REGISTRY_USER} -p ${DOCKER_REGISTRY_PASS}
     - docker build . -t ${IMAGE_NAME}:${IMAGE_TAG}
     - docker push ${IMAGE_NAME}:${IMAGE_TAG}
